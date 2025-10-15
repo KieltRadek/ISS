@@ -13,6 +13,8 @@ class RobotInterface:
         self.history = []
         self.timeout = 1.0  # Zmniejszony timeout
         self.max_retries = 3
+        self.backoff_base = 0.1  # Bazowy czas oczekiwania dla exponential backoff (100ms)
+        self.backoff_multiplier = 2  # Mnożnik dla exponential backoff
         self.current_velocity = 150  # Domyślna prędkość
         self.connected = False
         
@@ -45,7 +47,8 @@ class RobotInterface:
         """Test połączenia (watchdog)"""
         response = self.send_command("PING", retries=1)
         if response and "PONG" in response:
-            print("Watchdog: Połączenie aktywne")
+            #print("Watchdog: Połączenie aktywne")
+            self.connected = True
             return True
         else:
             print("Watchdog: Brak odpowiedzi")
@@ -53,7 +56,7 @@ class RobotInterface:
             return False
         
     def send_command(self, cmd, retries=None):
-        """Wysyła komendę z walidacją i ponowieniami"""
+        """Wysyła komendę z walidacją i ponowieniami z exponential backoff"""
         if not self.ser or not self.ser.is_open:
             print("Brak połączenia")
             return None
@@ -94,11 +97,22 @@ class RobotInterface:
                         print(f"NACK otrzymany: {response}")
                         return None
                 else:
-                    print(f"Timeout (próba {attempt+1}/{retries})")
-                    time.sleep(0.1)  # Krótka pauza przed kolejną próbą
+                    # Timeout - zastosuj exponential backoff
+                    if attempt < retries - 1:  # Nie czekaj po ostatniej próbie
+                        backoff_time = self.backoff_base * (self.backoff_multiplier ** attempt)
+                        print(f"Timeout (próba {attempt+1}/{retries}) - czekam {backoff_time:.2f}s przed ponowieniem...")
+                        self.log_message(f"Exponential backoff: {backoff_time:.2f}s")
+                        time.sleep(backoff_time)
+                    else:
+                        print(f"Timeout (próba {attempt+1}/{retries})")
                     
             except Exception as e:
                 print(f"Błąd komunikacji: {e}")
+                # Zastosuj exponential backoff także w przypadku wyjątku
+                if attempt < retries - 1:
+                    backoff_time = self.backoff_base * (self.backoff_multiplier ** attempt)
+                    self.log_message(f"Błąd - exponential backoff: {backoff_time:.2f}s")
+                    time.sleep(backoff_time)
         
         print("Brak odpowiedzi po wszystkich próbach")
         return None
@@ -217,15 +231,18 @@ class RobotInterface:
     
     def show_status(self):
         """Wyświetla status połączenia"""
+        self.watchdog_test()
         print(f"\n=== STATUS POŁĄCZENIA ===")
         print(f"Połączenie: {'✓ Aktywne' if self.connected else '✗ Nieaktywne'}")
         if self.ser and self.ser.is_open:
             print(f"Port: {self.ser.port}")
             print(f"Baudrate: {self.ser.baudrate}")
             print(f"Timeout: {self.timeout}s")
+            print(f"Max retries: {self.max_retries}")
+            print(f"Backoff: {self.backoff_base}s * {self.backoff_multiplier}^attempt")
         print(f"Liczba komend: {len(self.history)}")
         print(f"Liczba logów: {len(self.log)}")
-        self.watchdog_test()
+        #self.watchdog_test()
     
     def show_history(self):
         """Wyświetla historię komend"""
