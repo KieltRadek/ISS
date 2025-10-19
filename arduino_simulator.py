@@ -8,7 +8,7 @@ class ArduinoSimulator:
     
     def __init__(self):
         self.ser = None
-        self.current_velocity = 150  # Domyślna prędkość
+        self.current_velocity = 100  # Domyślna prędkość
         
     def calculate_checksum(self, cmd):
         """Oblicza sumę kontrolną komendy"""

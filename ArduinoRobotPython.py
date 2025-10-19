@@ -3,27 +3,21 @@ import serial.tools.list_ports
 import time
 from datetime import datetime
 
+# Pip install pyserial
 
 class RobotInterface:
-    """Główna klasa interfejsu komunikacji z robotem Arduino"""
-    
     def __init__(self):
         self.ser = None
         self.log = []
         self.history = []
-        self.timeout = 1.0  # Zmniejszony timeout
+        self.timeout = 1.0
         self.max_retries = 3
-        self.backoff_base = 0.1  # Bazowy czas oczekiwania dla exponential backoff (100ms)
-        self.backoff_multiplier = 2  # Mnożnik dla exponential backoff
-        self.current_velocity = 150  # Domyślna prędkość
         self.connected = False
         
     def calculate_checksum(self, cmd):
-        """Oblicza sumę kontrolną komendy"""
         return sum(ord(c) for c in cmd) % 256
     
     def list_ports(self):
-        """Wyświetla dostępne porty szeregowe"""
         ports = serial.tools.list_ports.comports()
         print("\n=== Dostępne porty szeregowe ===")
         for i, port in enumerate(ports, 1):
@@ -31,24 +25,22 @@ class RobotInterface:
         return [p.device for p in ports]
     
     def connect(self, port, baudrate=9600):
-        """Nawiązuje połączenie z Arduino"""
         try:
             self.ser = serial.Serial(port, baudrate, timeout=self.timeout)
-            time.sleep(2)  # Czas na inicjalizację Arduino
+            time.sleep(2)
             print(f"Połączono z {port} ({baudrate} baud)")
             self.connected = True
             self.watchdog_test()
+            self.set_velocity(100)
             return True
         except Exception as e:
             print(f"Błąd połączenia: {e}")
             return False
     
     def watchdog_test(self):
-        """Test połączenia (watchdog)"""
         response = self.send_command("PING", retries=1)
         if response and "PONG" in response:
-            #print("Watchdog: Połączenie aktywne")
-            self.connected = True
+            print("Watchdog: Połączenie aktywne")
             return True
         else:
             print("Watchdog: Brak odpowiedzi")
@@ -56,7 +48,6 @@ class RobotInterface:
             return False
         
     def send_command(self, cmd, retries=None):
-        """Wysyła komendę z walidacją i ponowieniami z exponential backoff"""
         if not self.ser or not self.ser.is_open:
             print("Brak połączenia")
             return None
@@ -76,7 +67,7 @@ class RobotInterface:
                 self.ser.flush()  # Upewnij się, że dane zostały wysłane
                 self.log_message(f"TX: {frame.strip('#')}")
                 
-                # Czekaj na odpowiedź ze stałym timeoutem
+                # Czekaj na odpowiedź
                 start = time.time()
                 response = ""
                 
@@ -86,7 +77,7 @@ class RobotInterface:
                         response += char
                         if char == '#':
                             break
-                    time.sleep(0.01)  # Krótkie opóźnienie, aby nie blokować CPU
+                    time.sleep(0.01)
                 
                 if response:
                     self.log_message(f"RX: {response.strip('#')}")
@@ -97,29 +88,17 @@ class RobotInterface:
                         print(f"NACK otrzymany: {response}")
                         return None
                 else:
-                    # Timeout - zastosuj exponential backoff
-                    if attempt < retries - 1:  # Nie czekaj po ostatniej próbie
-                        backoff_time = self.backoff_base * (self.backoff_multiplier ** attempt)
-                        print(f"Timeout (próba {attempt+1}/{retries}) - czekam {backoff_time:.2f}s przed ponowieniem...")
-                        self.log_message(f"Exponential backoff: {backoff_time:.2f}s")
-                        time.sleep(backoff_time)
-                    else:
-                        print(f"Timeout (próba {attempt+1}/{retries})")
+                    print(f"Timeout (próba {attempt+1}/{retries})")
+                    time.sleep(0.1)
                     
             except Exception as e:
                 print(f"Błąd komunikacji: {e}")
-                # Zastosuj exponential backoff także w przypadku wyjątku
-                if attempt < retries - 1:
-                    backoff_time = self.backoff_base * (self.backoff_multiplier ** attempt)
-                    self.log_message(f"Błąd - exponential backoff: {backoff_time:.2f}s")
-                    time.sleep(backoff_time)
         
         print("Brak odpowiedzi po wszystkich próbach")
         return None
     
     
     def log_message(self, msg):
-        """Loguje wiadomość z timestampem"""
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.log.append(f"[{timestamp}] {msg}")
     
@@ -127,22 +106,21 @@ class RobotInterface:
         """M(cm) - Ruch o zadaną odległość"""
         response = self.send_command(f"M({cm})")
         if response:
-            print(f"Robot porusza się o {cm} cm (prędkość: {self.current_velocity})")
+            print(f"Robot porusza się o {cm} cm")
         return response
     
-    def rotate(self, degrees):
-        """R(degrees) - Obrót o zadaną liczbę stopni"""
-        response = self.send_command(f"R({degrees})")
+    def rotate(self, steps):
+        """R(steps) - Obrót o zadaną liczbę kroków"""
+        response = self.send_command(f"R({steps})")
         if response:
-            direction = "prawo" if degrees > 0 else "lewo"
-            print(f"Robot obraca się {direction} o {abs(degrees)}°")
+            direction = "prawo" if steps > 0 else "lewo"
+            print(f"Robot obraca się {direction} ({abs(steps)} kroków)")
         return response
     
     def set_velocity(self, v):
         """V(v) - Ustawienie prędkości (0-255)"""
         response = self.send_command(f"V({v})")
         if response:
-            self.current_velocity = v
             print(f"Prędkość ustawiona na {v}")
         return response
     
@@ -176,7 +154,6 @@ class RobotInterface:
         return None
     
     def configure(self, config_dict):
-        """CFG - Konfiguracja silników i czujników"""
         cfg_str = ",".join([f"{k}={v}" for k, v in config_dict.items()])
         response = self.send_command(f"CFG({cfg_str})")
         if response:
@@ -184,74 +161,51 @@ class RobotInterface:
         return response
     
     def show_help(self):
-        """Wyświetla pomoc"""
         print("""
 ╔════════════════════════════════════════════════════════════╗
 ║           KOMENDY INTERFEJSU ROBOTA ARDUINO                ║
 ╠════════════════════════════════════════════════════════════╣
 ║ STEROWANIE:                                                ║
-║   m <cm>        - Ruch (+ przód, - tył)                    ║
-║   r <stopnie>   - Obrót (+ prawo, - lewo) 0-360°           ║
-║   v <0-255>     - Ustaw prędkość                           ║
-║   s             - STOP (natychmiast)                       ║
+║   m <cm>      - Ruch (+ przód, - tył)                      ║
+║   r <kroki>   - Obrót (+ prawo, - lewo)                    ║
+║   v <0-255>   - Ustaw prędkość                             ║
+║   s           - STOP (natychmiast)                         ║
 ║                                                            ║
 ║ SENSORY:                                                   ║
-║   b             - Odczyt sonaru [cm]                       ║
-║   i             - Odczyt IR                                ║
+║   b           - Odczyt sonaru [cm]                         ║
+║   i           - Odczyt IR                                  ║
 ║                                                            ║
-║ KONFIGURACJA (interaktywna z terminala):                   ║
-║   cfg           - Konfiguruj silniki/sensory               ║
-║                                                            ║
-║   Parametry konfiguracji:                                  ║
-║     M1 / M2          = LEFT / RIGHT                        ║
-║     M1_DIR / M2_DIR  = NORMAL / REVERSED                   ║
-║     S1 / S2          = FRONT / BACK                        ║
-║                                                            ║
-║  Przykład: robot> cfg                                      ║
-║     M1 = LEFT                                              ║
-║     M1_DIR = NORMAL                                        ║
-║     M2 = RIGHT                                             ║
-║     M2_DIR = REVERSED  (jeśli silnik jedzie odwrotnie)     ║
-║     S1 = FRONT                                             ║
-║     S2 = BACK                                              ║
-║                                                            ║
-║ KALIBRACJA (edycja pliku RobotArduino.ino):                ║
-║   Zmień wartości stałych w kodzie Arduino:                 ║
-║     PULSES_PER_CM          - Impulsy enkodera na 1 cm      ║
-║     PULSES_PER_360_DEGREES - Impulsy na pełny obrót 360°   ║
+║ KONFIGURACJA:                                              ║
+║   cfg         - Konfiguruj silniki/sensory                 ║
+║                 M1=LEFT/RIGHT, M2=LEFT/RIGHT               ║
+║                 S1=FRONT/BACK, S2=FRONT/BACK               ║
 ║                                                            ║
 ║ SYSTEM:                                                    ║
-║   help          - Ta pomoc                                 ║
-║   status        - Status połączenia                        ║
-║   history       - Historia komend                          ║
-║   save-log      - Zapisz log do pliku                      ║
-║   quit          - Zakończ                                  ║
+║   help        - Ta pomoc                                   ║
+║   status      - Status połączenia                          ║
+║   history     - Historia komend                            ║
+║   save-log    - Zapisz log do pliku                        ║
+║   quit        - Zakończ                                    ║
 ╚════════════════════════════════════════════════════════════╝
         """)
     
     def show_status(self):
-        """Wyświetla status połączenia"""
-        self.watchdog_test()
         print(f"\n=== STATUS POŁĄCZENIA ===")
-        print(f"Połączenie: {'✓ Aktywne' if self.connected else '✗ Nieaktywne'}")
+        print(f"Połączenie: {'Aktywne' if self.connected else 'Nieaktywne'}")
         if self.ser and self.ser.is_open:
             print(f"Port: {self.ser.port}")
             print(f"Baudrate: {self.ser.baudrate}")
             print(f"Timeout: {self.timeout}s")
-            print(f"Max retries: {self.max_retries}")
-            print(f"Backoff: {self.backoff_base}s * {self.backoff_multiplier}^attempt")
         print(f"Liczba komend: {len(self.history)}")
         print(f"Liczba logów: {len(self.log)}")
-        #self.watchdog_test()
+        self.watchdog_test()
     
     def show_history(self):
-        """Wyświetla historię komend"""
         print("\n=== HISTORIA KOMEND ===")
         for i, cmd in enumerate(self.history[-10:], 1):
             print(f"{i}. {cmd}")
     
     def save_log(self):
-        """Zapisuje log do pliku"""
         filename = f"robot_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         try:
             with open(filename, 'w', encoding='utf-8') as f:
@@ -264,7 +218,6 @@ class RobotInterface:
             print(f"Błąd zapisu: {e}")
 
     def interactive_config(self):
-        """Interaktywna konfiguracja silników i czujników"""
         print("\n=== KONFIGURACJA ROBOTA ===")
         
         config = {}
@@ -279,16 +232,6 @@ class RobotInterface:
             else:
                 print("Błąd: Wprowadź LEFT lub RIGHT")
         
-        # Konfiguracja kierunku silnika M1
-        while True:
-            print("Kierunek Silnika 1 (M1_DIR): NORMAL/REVERSED")
-            m1_dir = input("M1_DIR = ").strip().upper()
-            if m1_dir in ['NORMAL', 'REVERSED']:
-                config['M1_DIR'] = m1_dir
-                break
-            else:
-                print("Błąd: Wprowadź NORMAL lub REVERSED")
-        
         # Konfiguracja silnika M2
         while True:
             print("Silnik 2 (M2): LEFT/RIGHT")
@@ -298,16 +241,6 @@ class RobotInterface:
                 break
             else:
                 print("Błąd: Wprowadź LEFT lub RIGHT")
-        
-        # Konfiguracja kierunku silnika M2
-        while True:
-            print("Kierunek Silnika 2 (M2_DIR): NORMAL/REVERSED")
-            m2_dir = input("M2_DIR = ").strip().upper()
-            if m2_dir in ['NORMAL', 'REVERSED']:
-                config['M2_DIR'] = m2_dir
-                break
-            else:
-                print("Błąd: Wprowadź NORMAL lub REVERSED")
         
         # Konfiguracja czujnika S1
         while True:
@@ -333,7 +266,6 @@ class RobotInterface:
             self.configure(config)
     
     def run(self):
-        """Główna pętla interfejsu"""
         print("╔════════════════════════════════════════════╗")
         print("║      INTERFEJS KOMUNIKACJI PC-ARDUINO      ║")
         print("╚════════════════════════════════════════════╝")
@@ -351,17 +283,14 @@ class RobotInterface:
             print("Nieprawidłowy wybór")
             return
         
-        # Baudrate
         baudrate = input("Baudrate [9600]: ").strip()
         baudrate = int(baudrate) if baudrate else 9600
         
-        # Połączenie
         if not self.connect(port, baudrate):
             return
         
         print("\nWpisz 'help' aby zobaczyć dostępne komendy\n")
         
-        # Główna pętla
         while True:
             try:
                 cmd = input("robot> ").strip()
