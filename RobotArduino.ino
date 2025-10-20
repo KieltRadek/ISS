@@ -34,8 +34,8 @@ String sensor1Role = "FRONT";
 String sensor2Role = "BACK"; 
 
 int speed = 100;
-volatile int left_encoder_count = 0;  // Licznik impulsów lewego enkodera volatile żeby nie było stałej z początku
-volatile int right_encoder_count = 0; // Licznik impulsów prawego enkodera volatile żeby nie było stałej z początku
+volatile int left_encoder_count = 0;
+volatile int right_encoder_count = 0;
 
 // Funkcje obsługi przerwań enkoderów - wywoływane automatycznie przy każdym impulsie
 void left_encoder(){
