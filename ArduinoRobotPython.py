@@ -13,6 +13,7 @@ class RobotInterface:
         self.timeout = 1.0
         self.max_retries = 3
         self.connected = False
+        self.telemetry_enabled = False  # <— dodane
         
     def calculate_checksum(self, cmd):
         return sum(ord(c) for c in cmd) % 256
@@ -31,7 +32,6 @@ class RobotInterface:
             print(f"Połączono z {port} ({baudrate} baud)")
             self.connected = True
             self.watchdog_test()
-            self.set_velocity(100)
             return True
         except Exception as e:
             print(f"Błąd połączenia: {e}")
@@ -58,38 +58,41 @@ class RobotInterface:
         
         for attempt in range(retries):
             try:
-                # Wyczyść bufory przed wysłaniem
+                # Wyczyść bufory przed wysłaniem (telemetria może zostać ucięta — akceptowalne)
                 self.ser.reset_input_buffer()
                 self.ser.reset_output_buffer()
                 
                 # Wyślij ramkę
                 self.ser.write(frame.encode())
-                self.ser.flush()  # Upewnij się, że dane zostały wysłane
+                self.ser.flush()
                 self.log_message(f"TX: {frame.strip('#')}")
                 
-                # Czekaj na odpowiedź
+                # Czekaj na ramkę zakończoną '#'
                 start = time.time()
-                response = ""
-                
                 while (time.time() - start) < self.timeout:
                     if self.ser.in_waiting > 0:
-                        char = self.ser.read().decode('utf-8', errors='ignore')
-                        response += char
-                        if char == '#':
-                            break
-                    time.sleep(0.01)
+                        line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                        if not line:
+                            continue
+                        # Telemetria (bez '#') – pokaż jeśli włączona i pomiń
+                        if not line.endswith('#'):
+                            if self.telemetry_enabled:
+                                print(line)
+                            continue
+                        # Ramka z '#'
+                        self.log_message(f"RX: {line.strip('#')}")
+                        if line.startswith("ACK"):
+                            return line.strip('#')
+                        if line.startswith("NACK"):
+                            print(line)
+                            return None
+                        # Inne ramki (RESULT itp.) można ewentualnie wypisać
+                        print(f"[FRAME] {line}")
+                    else:
+                        time.sleep(0.01)
                 
-                if response:
-                    self.log_message(f"RX: {response.strip('#')}")
-                    
-                    if response.startswith("ACK"):
-                        return response.strip('#')
-                    elif response.startswith("NACK"):
-                        print(f"NACK otrzymany: {response}")
-                        return None
-                else:
-                    print(f"Timeout (próba {attempt+1}/{retries})")
-                    time.sleep(0.1)
+                print(f"Timeout (próba {attempt+1}/{retries})")
+                time.sleep(0.1)
                     
             except Exception as e:
                 print(f"Błąd komunikacji: {e}")
@@ -102,56 +105,6 @@ class RobotInterface:
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.log.append(f"[{timestamp}] {msg}")
     
-    def move(self, cm):
-        """M(cm) - Ruch o zadaną odległość"""
-        response = self.send_command(f"M({cm})")
-        if response:
-            print(f"Robot porusza się o {cm} cm")
-        return response
-    
-    def rotate(self, steps):
-        """R(steps) - Obrót o zadaną liczbę kroków"""
-        response = self.send_command(f"R({steps})")
-        if response:
-            direction = "prawo" if steps > 0 else "lewo"
-            print(f"Robot obraca się {direction} ({abs(steps)} kroków)")
-        return response
-    
-    def set_velocity(self, v):
-        """V(v) - Ustawienie prędkości (0-255)"""
-        response = self.send_command(f"V({v})")
-        if response:
-            print(f"Prędkość ustawiona na {v}")
-        return response
-    
-    def stop(self):
-        """S - Zatrzymanie robota"""
-        response = self.send_command("S")
-        if response:
-            print("Robot zatrzymany")
-        return response
-    
-    def read_sonar(self):
-        """B - Odczyt sonaru"""
-        response = self.send_command("B")
-        if response:
-            parts = response.split('|')
-            if len(parts) > 1:
-                distance = parts[1]
-                print(f"Sonar: {distance} cm")
-                return distance
-        return None
-    
-    def read_ir(self):
-        """I - Odczyt czujników IR"""
-        response = self.send_command("I")
-        if response:
-            parts = response.split('|')
-            if len(parts) > 1:
-                data = parts[1]
-                print(f"✓ IR: {data}")
-                return data
-        return None
     
     def configure(self, config_dict):
         cfg_str = ",".join([f"{k}={v}" for k, v in config_dict.items()])
@@ -160,31 +113,108 @@ class RobotInterface:
             print(f"Konfiguracja zastosowana: {cfg_str}")
         return response
     
+    def start_test_mode(self, auto_monitor=False, seconds=0):
+        """Uruchomienie trybu testowego; od teraz telemetria leci ciągle aż do TEST_STOP."""
+        response = self.send_command("TEST_START")
+        if response:
+            print("Tryb testowy uruchomiony")
+            self.telemetry_enabled = True   # <— telemetria on
+        return response
+    
+    def stop_test_mode(self):
+        """Zatrzymanie trybu testowego"""
+        response = self.send_command("TEST_STOP")
+        if response:
+            print("Tryb testowy zatrzymany")
+            self.telemetry_enabled = False  # <— telemetria off
+        return response
+    
+    def start_exam_mode(self):
+        """Uruchomienie trybu egzaminacyjnego"""
+        response = self.send_command("EXAM_START")
+        if response:
+            print("Tryb egzaminacyjny uruchomiony")
+            print("Oczekiwanie na wynik (13s)...")
+        return response
+
+    def interactive_config(self):
+        print("\n=== KONFIGURACJA ROBOTA ===")
+        
+        config = {}
+
+        while True:
+            distance = input("distance_point (cm) = ").strip()
+            try:
+                distance_val = float(distance)
+                config['DIST_POINT'] = distance_val
+                break
+            except ValueError:
+                print("Błąd: Wprowadź wartość liczbową")
+
+        while True:
+            kp = input("kp = ").strip()
+            try:
+                kp_val = float(kp)
+                config['KP'] = kp_val
+                break
+            except ValueError:
+                print("Błąd: Wprowadź wartość liczbową")
+
+        while True:
+            ki = input("ki = ").strip()
+            try:
+                ki_val = float(ki)
+                config['KI'] = ki_val
+                break
+            except ValueError:
+                print("Błąd: Wprowadź wartość liczbową")
+
+        while True:
+            kd = input("kd = ").strip()
+            try:
+                kd_val = float(kd)
+                config['KD'] = kd_val
+                break
+            except ValueError:
+                print("Błąd: Wprowadź wartość liczbową")
+
+        while True:
+            servo_zero = input("servo_zero (stopnie) = ").strip()
+            try:
+                servo_zero_val = int(servo_zero)
+                config['SERVO_ZERO'] = servo_zero_val
+                break
+            except ValueError:
+                print("Błąd: Wprowadź wartość całkowitą")
+        
+        while True:
+            t = input("t (ms, pętla PID) = ").strip()
+            try:
+                t_val = int(t)
+                config['T'] = t_val
+                break
+            except ValueError:
+                print("Błąd: Wprowadź wartość całkowitą")
+
+        if config:
+            self.configure(config)
+    
     def show_help(self):
         print("""
 ╔════════════════════════════════════════════════════════════╗
-║           KOMENDY INTERFEJSU ROBOTA ARDUINO                ║
+║           KOMENDY INTERFEJSU POCHYLNI ARDUINO              ║
 ╠════════════════════════════════════════════════════════════╣
-║ STEROWANIE:                                                ║
-║   m <cm>      - Ruch (+ przód, - tył)                      ║
-║   r <kroki>   - Obrót (+ prawo, - lewo)                    ║
-║   v <0-255>   - Ustaw prędkość                             ║
-║   s           - STOP (natychmiast)                         ║
-║                                                            ║
-║ SENSORY:                                                   ║
-║   b           - Odczyt sonaru [cm]                         ║
-║   i           - Odczyt IR                                  ║
-║                                                            ║
 ║ KONFIGURACJA:                                              ║
-║   cfg         - Konfiguruj silniki/sensory                 ║
-║                 M1=LEFT/RIGHT, M2=LEFT/RIGHT               ║
-║                 S1=FRONT/BACK, S2=FRONT/BACK               ║
+║   cfg         - Konfiguruj PID i parametry                 ║
+║                                                            ║
+║ TRYBY:                                                     ║
+║   test-start  - Uruchom tryb testowy (telemetria)          ║
+║   test-stop   - Zatrzymaj tryb testowy                     ║
+║   exam        - Uruchom tryb egzaminacyjny (13s)           ║
 ║                                                            ║
 ║ SYSTEM:                                                    ║
 ║   help        - Ta pomoc                                   ║
 ║   status      - Status połączenia                          ║
-║   history     - Historia komend                            ║
-║   save-log    - Zapisz log do pliku                        ║
 ║   quit        - Zakończ                                    ║
 ╚════════════════════════════════════════════════════════════╝
         """)
@@ -217,54 +247,46 @@ class RobotInterface:
         except Exception as e:
             print(f"Błąd zapisu: {e}")
 
-    def interactive_config(self):
-        print("\n=== KONFIGURACJA ROBOTA ===")
-        
-        config = {}
-        
-        # Konfiguracja silnika M1
-        while True:
-            print("Silnik 1 (M1): LEFT/RIGHT")
-            m1 = input("M1 = ").strip().upper()
-            if m1 in ['LEFT', 'RIGHT']:
-                config['M1'] = m1
-                break
-            else:
-                print("Błąd: Wprowadź LEFT lub RIGHT")
-        
-        # Konfiguracja silnika M2
-        while True:
-            print("Silnik 2 (M2): LEFT/RIGHT")
-            m2 = input("M2 = ").strip().upper()
-            if m2 in ['LEFT', 'RIGHT']:
-                config['M2'] = m2
-                break
-            else:
-                print("Błąd: Wprowadź LEFT lub RIGHT")
-        
-        # Konfiguracja czujnika S1
-        while True:
-            print("Czujnik 1 (S1): FRONT/BACK")
-            s1 = input("S1 = ").strip().upper()
-            if s1 in ['FRONT', 'BACK']:
-                config['S1'] = s1
-                break
-            else:
-                print("Błąd: Wprowadź FRONT lub BACK")
-        
-        # Konfiguracja czujnika S2
-        while True:
-            print("Czujnik 2 (S2): FRONT/BACK")
-            s2 = input("S2 = ").strip().upper()
-            if s2 in ['FRONT', 'BACK']:
-                config['S2'] = s2
-                break
-            else:
-                print("Błąd: Wprowadź FRONT lub BACK")
-        
-        if config:
-            self.configure(config)
-    
+    def pump_telemetry(self):
+        """Nieblokujące wypompowanie dostępnych linii. Drukuje tylko telemetrię bez '#'. """
+        if not self.ser or not self.ser.is_open:
+            return
+        try:
+            # Czytaj dopóki coś jest w buforze
+            while self.ser.in_waiting > 0:
+                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                if not line:
+                    continue
+                if line.endswith('#'):
+                    # Ramki – można pokazać jako informację
+                    print(f"[FRAME] {line}")
+                else:
+                    if self.telemetry_enabled:
+                        print(line)
+        except Exception:
+            pass
+
+    def monitor(self, seconds=0):
+        """Podgląd telemetrii (DIST/ERR/OUT). seconds=0 => bez limitu, Ctrl+C aby przerwać."""
+        if not self.ser or not self.ser.is_open:
+            print("Brak połączenia")
+            return
+        print("Monitor telemetrii: uruchom TEST_START na Arduino. Ctrl+C aby przerwać.")
+        deadline = time.time() + seconds if seconds > 0 else None
+        try:
+            while deadline is None or time.time() < deadline:
+                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                if line:
+                    # Ramki z # pokazuj jako [FRAME], reszta to telemetria
+                    if line.endswith('#') or line.startswith(('ACK', 'NACK', 'RESULT')):
+                        print(f"[FRAME] {line}")
+                    else:
+                        print(line)
+                else:
+                    time.sleep(0.01)
+        except KeyboardInterrupt:
+            pass
+
     def run(self):
         print("╔════════════════════════════════════════════╗")
         print("║      INTERFEJS KOMUNIKACJI PC-ARDUINO      ║")
@@ -293,6 +315,9 @@ class RobotInterface:
         
         while True:
             try:
+                # Nieblokujący podgląd telemetrii między komendami
+                self.pump_telemetry()  # <— tu drukuje DIST/ERR/OUT gdy test trwa
+
                 cmd = input("robot> ").strip()
                 if not cmd:
                     continue
@@ -317,27 +342,21 @@ class RobotInterface:
                 elif command == 'save-log':
                     self.save_log()
                 
-                elif command == 'm' and len(parts) > 1:
-                    self.move(int(parts[1]))
-                
-                elif command == 'r' and len(parts) > 1:
-                    self.rotate(int(parts[1]))
-                
-                elif command == 'v' and len(parts) > 1:
-                    self.set_velocity(int(parts[1]))
-                
-                elif command == 's':
-                    self.stop()
-                
-                elif command == 'b':
-                    self.read_sonar()
-                
-                elif command == 'i':
-                    self.read_ir()
-                
                 elif command == 'cfg':
                     self.interactive_config()
                 
+                elif command == 'test-start':
+                    self.start_test_mode()
+                elif command == 'test-stop':
+                    self.stop_test_mode()
+
+                elif command == 'monitor':
+                    secs = int(parts[1]) if len(parts) > 1 else 0
+                    self.monitor(secs)
+                
+                elif command == 'exam':
+                    self.start_exam_mode()
+
                 else:
                     print("Nieznana komenda. Wpisz 'help' aby zobaczyć pomoc.")
             
