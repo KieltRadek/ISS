@@ -129,12 +129,46 @@ class RobotInterface:
             self.telemetry_enabled = False  # <— telemetria off
         return response
     
+    def set_target(self, distance_cm):
+        """Ustawienie punktu docelowego"""
+        response = self.send_command(f"SET_TARGET({distance_cm})")
+        if response:
+            print(f"Target ustawiony na: {distance_cm} cm")
+        return response
+    
+    def set_servo_zero(self, angle):
+        """Ustawienie wartości zero serwomechanizmu"""
+        response = self.send_command(f"SET_SERVO_ZERO({angle})")
+        if response:
+            print(f"Servo zero ustawione na: {angle} stopni")
+        return response
+    
     def start_exam_mode(self):
         """Uruchomienie trybu egzaminacyjnego"""
         response = self.send_command("EXAM_START")
         if response:
             print("Tryb egzaminacyjny uruchomiony")
             print("Oczekiwanie na wynik (13s)...")
+            
+            # Czekaj na RESULT przez max 15s
+            start = time.time()
+            while (time.time() - start) < 15:
+                if self.ser.in_waiting > 0:
+                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                    if not line:
+                        continue
+                    if line.startswith("RESULT"):
+                        print(f"\n🎯 {line.strip('#')}")
+                        return line
+                    elif line.endswith('#'):
+                        # Inne ramki - możesz je pokazać
+                        pass
+                    else:
+                        # Telemetria - możesz pokazać jeśli chcesz
+                        pass
+                else:
+                    time.sleep(0.01)
+            print("⚠️ Timeout - brak wyniku")
         return response
 
     def interactive_config(self):
@@ -205,17 +239,22 @@ class RobotInterface:
 ║           KOMENDY INTERFEJSU POCHYLNI ARDUINO              ║
 ╠════════════════════════════════════════════════════════════╣
 ║ KONFIGURACJA:                                              ║
-║   cfg         - Konfiguruj PID i parametry                 ║
+║   cfg           - Konfiguruj PID i parametry               ║
+║   set-target    - Ustaw punkt docelowy (cm)                ║
+║   set-servo     - Ustaw servo zero (stopnie)               ║
 ║                                                            ║
 ║ TRYBY:                                                     ║
-║   test-start  - Uruchom tryb testowy (telemetria)          ║
-║   test-stop   - Zatrzymaj tryb testowy                     ║
-║   exam        - Uruchom tryb egzaminacyjny (13s)           ║
+║   test-start    - Uruchom tryb testowy (telemetria)        ║
+║   test-stop     - Zatrzymaj tryb testowy                   ║
+║   exam          - Uruchom tryb egzaminacyjny (13s)         ║
+║   monitor [s]   - Monitor telemetrii (opcjonalnie s sek)   ║
 ║                                                            ║
 ║ SYSTEM:                                                    ║
-║   help        - Ta pomoc                                   ║
-║   status      - Status połączenia                          ║
-║   quit        - Zakończ                                    ║
+║   help          - Ta pomoc                                 ║
+║   status        - Status połączenia                        ║
+║   history       - Historia komend                          ║
+║   save-log      - Zapisz log do pliku                      ║
+║   quit          - Zakończ                                  ║
 ╚════════════════════════════════════════════════════════════╝
         """)
     
@@ -344,6 +383,34 @@ class RobotInterface:
                 
                 elif command == 'cfg':
                     self.interactive_config()
+                
+                elif command == 'set-target':
+                    if len(parts) > 1:
+                        try:
+                            distance = float(parts[1])
+                            self.set_target(distance)
+                        except ValueError:
+                            print("Błąd: Podaj wartość liczbową (cm)")
+                    else:
+                        distance = input("Podaj odległość docelową (cm): ").strip()
+                        try:
+                            self.set_target(float(distance))
+                        except ValueError:
+                            print("Błąd: Wartość musi być liczbą")
+                
+                elif command == 'set-servo':
+                    if len(parts) > 1:
+                        try:
+                            angle = int(parts[1])
+                            self.set_servo_zero(angle)
+                        except ValueError:
+                            print("Błąd: Podaj wartość całkowitą (stopnie)")
+                    else:
+                        angle = input("Podaj kąt servo zero (stopnie): ").strip()
+                        try:
+                            self.set_servo_zero(int(angle))
+                        except ValueError:
+                            print("Błąd: Wartość musi być liczbą całkowitą")
                 
                 elif command == 'test-start':
                     self.start_test_mode()

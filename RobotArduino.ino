@@ -56,7 +56,9 @@ void PID(){
   
   // Ograniczenie wyjścia (zakładam ±45 stopni)
   output = constrain(output, -45, 45);
-  myservo.write(servo_zero + (int)output);
+  int servoAngle = servo_zero + (int)output;
+  servoAngle = constrain(servoAngle, 0, 180);  // Bezpieczeństwo
+  myservo.write(servoAngle);
 }
 
 // Walidacja ramki
@@ -119,6 +121,17 @@ void parseCommand(String frame){
   else if(cmd == "TEST_STOP"){
     testMode = false;
     Serial.println("ACK|TEST_MODE_OFF#");
+  }
+  else if(cmd.startsWith("SET_TARGET(")){
+    String val = cmd.substring(11, cmd.length() - 1);
+    distance_point = val.toFloat();
+    Serial.println("ACK|TARGET_SET#");
+  }
+  else if(cmd.startsWith("SET_SERVO_ZERO(")){
+    String val = cmd.substring(15, cmd.length() - 1);
+    servo_zero = val.toInt();
+    myservo.write(servo_zero);
+    Serial.println("ACK|SERVO_ZERO_SET#");
   }
   else if(cmd == "EXAM_START"){
     examMode = true;
@@ -197,6 +210,8 @@ void loop() {
           Serial.print(mae, 2);
           Serial.println("#");
           examMode = false;
+          integral = 0.0;
+          previousError = 0.0;
           myservo.write(servo_zero);
         }
       }
