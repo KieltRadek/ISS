@@ -42,23 +42,31 @@ void PID(){
   derivative = (error - previousError) / (t / 1000.0);
   float output = kp * error + ki * integral + kd * derivative;
   
+  // Dynamiczne ograniczenia wyjścia na podstawie servo_zero
+  float maxOut = 180.0 - (float)servo_zero;
+  float minOut = -(float)servo_zero;
+  if (output > maxOut) output = maxOut;
+  if (output < minOut) output = minOut;
+  
   // Telemetria w trybie TEST
   if(testMode){
-    Serial.print("DIST:");
     Serial.print(distance);
-    Serial.print(" ERR:");
+    Serial.print(" : ");
     Serial.print(error);
-    Serial.print(" OUT:");
+    Serial.print(" : ");
     Serial.println(output);
+  }
+  
+  // Akumulacja MAE w fazie 2 EXAM (tu, w każdym cyklu PID)
+  if(stabilizationPhase){
+    float absError = (error >= 0) ? error : -error;
+    errorSum += absError;
+    errorCount++;
   }
   
   previousError = error;
   
-  // Ograniczenie wyjścia (zakładam ±45 stopni)
-  output = constrain(output, -45, 45);
-  int servoAngle = servo_zero + (int)output;
-  servoAngle = constrain(servoAngle, 0, 180);  // Bezpieczeństwo
-  myservo.write(servoAngle);
+  myservo.write(servo_zero + (int)output);
 }
 
 // Walidacja ramki
@@ -101,7 +109,7 @@ void applyConfig(String cfgBody){
   }
 }
 
-// Parsowanie komend
+
 void parseCommand(String frame){
   int sepIndex = frame.indexOf('|');
   String cmd = frame.substring(0, sepIndex);
@@ -147,6 +155,27 @@ void parseCommand(String frame){
   else if(cmd == "PING"){
     Serial.println("ACK|PONG#");
   }
+  else if(cmd == "STATUS"){
+    Serial.print("ACK|KP:");
+    Serial.print(kp);
+    Serial.print(",KI:");
+    Serial.print(ki);
+    Serial.print(",KD:");
+    Serial.print(kd);
+    Serial.print(",DIST_POINT:");
+    Serial.print(distance_point);
+    Serial.print(",SERVO_ZERO:");
+    Serial.print(servo_zero);
+    Serial.print(",T:");
+    Serial.print(t);
+    Serial.println("#");
+  }
+  else if(cmd == "READ_DISTANCE"){
+    float dist = get_dist(100);
+    Serial.print("ACK|DIST:");
+    Serial.print(dist, 2);
+    Serial.println("#");
+  }
   else{
     Serial.println("NACK|UNKNOWN_CMD#");
   }
@@ -181,6 +210,7 @@ void loop() {
     distance = get_dist(100); 
     myTime = millis();
     
+    // PID działa tylko w trybie TEST lub EXAM
     if(testMode || examMode){
       PID();
     }
@@ -197,19 +227,16 @@ void loop() {
         errorCount = 0;
       }
       
-      // Faza 2: Pomiar MAE (3s)
+      // Faza 2: Pomiar MAE (3s) - liczenie już w PID()
       if(stabilizationPhase){
-        float error = abs(distance - distance_point);
-        errorSum += error;
-        errorCount++;
-        
         unsigned long stabilizationTime = millis() - stabilizationStartTime;
         if(stabilizationTime >= 3000){
-          float mae = errorSum / errorCount;
+          float mae = (errorCount > 0) ? (errorSum / errorCount) : 0.0;
           Serial.print("RESULT|MAE:");
           Serial.print(mae, 2);
           Serial.println("#");
           examMode = false;
+          stabilizationPhase = false;
           integral = 0.0;
           previousError = 0.0;
           myservo.write(servo_zero);

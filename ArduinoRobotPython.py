@@ -13,7 +13,7 @@ class RobotInterface:
         self.timeout = 1.0
         self.max_retries = 3
         self.connected = False
-        self.telemetry_enabled = False  # <— dodane
+        self.telemetry_enabled = False  
         
     def calculate_checksum(self, cmd):
         return sum(ord(c) for c in cmd) % 256
@@ -58,16 +58,13 @@ class RobotInterface:
         
         for attempt in range(retries):
             try:
-                # Wyczyść bufory przed wysłaniem (telemetria może zostać ucięta — akceptowalne)
                 self.ser.reset_input_buffer()
                 self.ser.reset_output_buffer()
                 
-                # Wyślij ramkę
                 self.ser.write(frame.encode())
                 self.ser.flush()
                 self.log_message(f"TX: {frame.strip('#')}")
                 
-                # Czekaj na ramkę zakończoną '#'
                 start = time.time()
                 while (time.time() - start) < self.timeout:
                     if self.ser.in_waiting > 0:
@@ -143,6 +140,20 @@ class RobotInterface:
             print(f"Servo zero ustawione na: {angle} stopni")
         return response
     
+    def get_status(self):
+        """Odczyt parametrów z Arduino"""
+        response = self.send_command("STATUS")
+        if response:
+            print(f"Parametry: {response}")
+        return response
+    
+    def read_distance(self):
+        """Jednorazowy pomiar odległości"""
+        response = self.send_command("READ_DISTANCE")
+        if response:
+            print(f"Odległość: {response}")
+        return response
+    
     def start_exam_mode(self):
         """Uruchomienie trybu egzaminacyjnego"""
         response = self.send_command("EXAM_START")
@@ -158,7 +169,7 @@ class RobotInterface:
                     if not line:
                         continue
                     if line.startswith("RESULT"):
-                        print(f"\n🎯 {line.strip('#')}")
+                        print(f"\n {line.strip('#')}")
                         return line
                     elif line.endswith('#'):
                         # Inne ramki - możesz je pokazać
@@ -168,7 +179,7 @@ class RobotInterface:
                         pass
                 else:
                     time.sleep(0.01)
-            print("⚠️ Timeout - brak wyniku")
+            print("Timeout - brak wyniku")
         return response
 
     def interactive_config(self):
@@ -249,9 +260,13 @@ class RobotInterface:
 ║   exam          - Uruchom tryb egzaminacyjny (13s)         ║
 ║   monitor [s]   - Monitor telemetrii (opcjonalnie s sek)   ║
 ║                                                            ║
+║ DIAGNOSTYKA:                                               ║
+║   status        - Status połączenia                        ║
+║   params        - Odczyt parametrów z Arduino              ║
+║   read-dist     - Jednorazowy pomiar odległości            ║
+║                                                            ║
 ║ SYSTEM:                                                    ║
 ║   help          - Ta pomoc                                 ║
-║   status        - Status połączenia                        ║
 ║   history       - Historia komend                          ║
 ║   save-log      - Zapisz log do pliku                      ║
 ║   quit          - Zakończ                                  ║
@@ -423,6 +438,12 @@ class RobotInterface:
                 
                 elif command == 'exam':
                     self.start_exam_mode()
+                
+                elif command == 'params':
+                    self.get_status()
+                
+                elif command == 'read-dist':
+                    self.read_distance()
 
                 else:
                     print("Nieznana komenda. Wpisz 'help' aby zobaczyć pomoc.")
