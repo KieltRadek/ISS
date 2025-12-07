@@ -247,22 +247,32 @@ class RobotInterface:
     def show_help(self):
         print("""
 ╔════════════════════════════════════════════════════════════╗
-║           KOMENDY INTERFEJSU POCHYLNI ARDUINO              ║
+║           INTERFEJS KOMUNIKACJI PC-ARDUINO                 ║
 ╠════════════════════════════════════════════════════════════╣
-║ KONFIGURACJA:                                              ║
-║   cfg           - Konfiguruj PID i parametry               ║
-║   set-target    - Ustaw punkt docelowy (cm)                ║
-║   set-servo     - Ustaw servo zero (stopnie)               ║
+║ STEROWANIE ROBOTEM (JAZDA PO LINII):                       ║
+║   P             - Włącz tryb jazdy po linii                ║
+║   S             - Zatrzymaj robota                         ║
+║   kp <val>      - Ustaw parametr Kp (np. kp 20)            ║
+║   ki <val>      - Ustaw parametr Ki (np. ki 0.5)           ║
+║   kd <val>      - Ustaw parametr Kd (np. kd 5)             ║
+║   vref <val>    - Ustaw prędkość bazową (0-255)            ║
+║   t <ms>        - Ustaw okres próbkowania (50-300ms)       ║
 ║                                                            ║
-║ TRYBY:                                                     ║
-║   test-start    - Uruchom tryb testowy (telemetria)        ║
-║   test-stop     - Zatrzymaj tryb testowy                   ║
-║   exam          - Uruchom tryb egzaminacyjny (13s)         ║
+║ KALIBRACJA I DIAGNOSTYKA:                                  ║
+║   calibrate     - Kalibruj tracker (przesuwaj nad linią)   ║
+║   read-line     - Odczyt pozycji linii                     ║
+║   status        - Status i parametry PID                   ║
+║   telemetry-on  - Włącz telemetrię (POS/ERR/OUT)           ║
+║   telemetry-off - Wyłącz telemetrię                        ║
 ║   monitor [s]   - Monitor telemetrii (opcjonalnie s sek)   ║
 ║                                                            ║
-║ DIAGNOSTYKA:                                               ║
-║   status        - Status połączenia                        ║
-║   params        - Odczyt parametrów z Arduino              ║
+║ POCHYLNIA (PROJEKT 1):                                     ║
+║   cfg           - Konfiguruj PID pochylni                  ║
+║   set-target    - Ustaw punkt docelowy (cm)                ║
+║   set-servo     - Ustaw servo zero (stopnie)               ║
+║   test-start    - Uruchom tryb testowy pochylni            ║
+║   test-stop     - Zatrzymaj tryb testowy                   ║
+║   exam          - Uruchom tryb egzaminacyjny (13s)         ║
 ║   read-dist     - Jednorazowy pomiar odległości            ║
 ║                                                            ║
 ║ SYSTEM:                                                    ║
@@ -444,6 +454,121 @@ class RobotInterface:
                 
                 elif command == 'read-dist':
                     self.read_distance()
+                
+                # Komendy jazdy po linii
+                elif command == 'p':
+                    response = self.send_command("P")
+                    if response:
+                        print("Tryb jazdy po linii WŁĄCZONY")
+                
+                elif command == 's':
+                    response = self.send_command("S")
+                    if response:
+                        print("Robot ZATRZYMANY")
+                
+                elif command == 'kp':
+                    if len(parts) > 1:
+                        try:
+                            val = float(parts[1])
+                            response = self.send_command(f"Kp {val}")
+                            if response:
+                                print(f"Kp ustawione na: {val}")
+                        except ValueError:
+                            print("Błąd: Podaj wartość liczbową")
+                    else:
+                        val = input("Podaj wartość Kp: ").strip()
+                        try:
+                            response = self.send_command(f"Kp {float(val)}")
+                            if response:
+                                print(f"Kp ustawione na: {val}")
+                        except ValueError:
+                            print("Błąd: Wartość musi być liczbą")
+                
+                elif command == 'ki':
+                    if len(parts) > 1:
+                        try:
+                            val = float(parts[1])
+                            response = self.send_command(f"Ki {val}")
+                            if response:
+                                print(f"Ki ustawione na: {val}")
+                        except ValueError:
+                            print("Błąd: Podaj wartość liczbową")
+                    else:
+                        val = input("Podaj wartość Ki: ").strip()
+                        try:
+                            response = self.send_command(f"Ki {float(val)}")
+                            if response:
+                                print(f"Ki ustawione na: {val}")
+                        except ValueError:
+                            print("Błąd: Wartość musi być liczbą")
+                
+                elif command == 'kd':
+                    if len(parts) > 1:
+                        try:
+                            val = float(parts[1])
+                            response = self.send_command(f"Kd {val}")
+                            if response:
+                                print(f"Kd ustawione na: {val}")
+                        except ValueError:
+                            print("Błąd: Podaj wartość liczbową")
+                    else:
+                        val = input("Podaj wartość Kd: ").strip()
+                        try:
+                            response = self.send_command(f"Kd {float(val)}")
+                            if response:
+                                print(f"Kd ustawione na: {val}")
+                        except ValueError:
+                            print("Błąd: Wartość musi być liczbą")
+                
+                elif command == 'vref':
+                    if len(parts) > 1:
+                        try:
+                            val = int(parts[1])
+                            response = self.send_command(f"Vref {val}")
+                            if response:
+                                print(f"Vref ustawione na: {val}")
+                        except ValueError:
+                            print("Błąd: Podaj wartość całkowitą (0-255)")
+                    else:
+                        val = input("Podaj prędkość bazową (0-255): ").strip()
+                        try:
+                            response = self.send_command(f"Vref {int(val)}")
+                            if response:
+                                print(f"Vref ustawione na: {val}")
+                        except ValueError:
+                            print("Błąd: Wartość musi być liczbą całkowitą")
+                
+                elif command == 't' and len(parts) > 1:
+                    try:
+                        val = int(parts[1])
+                        response = self.send_command(f"T {val}")
+                        if response:
+                            print(f"Okres próbkowania ustawiony na: {val} ms")
+                    except ValueError:
+                        print("Błąd: Podaj wartość całkowitą (50-300)")
+                
+                elif command == 'calibrate':
+                    print("Kalibracja trackera - przesuwaj robota nad linią...")
+                    response = self.send_command("CALIBRATE")
+                    if response:
+                        print("Kalibracja zakończona")
+                
+                elif command == 'read-line':
+                    response = self.send_command("READ_LINE")
+                    if response:
+                        print(f"Pozycja linii: {response}")
+                
+                elif command == 'telemetry-on':
+                    response = self.send_command("TELEMETRY_ON")
+                    if response:
+                        print("Telemetria WŁĄCZONA")
+                        self.telemetry_enabled = True
+                
+                elif command == 'telemetry-off':
+                    response = self.send_command("TELEMETRY_OFF")
+                    if response:
+                        print("Telemetria WYŁĄCZONA")
+                        self.telemetry_enabled = False
 
                 else:
                     print("Nieznana komenda. Wpisz 'help' aby zobaczyć pomoc.")

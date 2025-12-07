@@ -1,9 +1,35 @@
-# ISS - Intelligent Stabilization System
-## System sterowania pochylnią z regulatorem PID
+# ISS - Intelligent Stabilization & Steering Systems
+## Projekty z Inteligentnych Systemów Sterowania
 
-Projekt implementuje zaawansowany system sterowania pochylnią oparty na regulatorze PID. System składa się z oprogramowania Arduino (C++) kontrolującego fizyczne urządzenie oraz interfejsu PC w Pythonie umożliwiającego konfigurację i monitoring.
+Repozytorium zawiera dwa projekty demonstrujące zastosowanie regulatorów PID w systemach sterowania:
 
-## 🎯 Opis projektu
+### 📊 Projekt 1: System stabilizacji pochylni
+System sterowania pochylnią z regulatorem PID - utrzymywanie piłki w zadanym punkcie.
+
+### 🤖 Projekt 2: Robot jadący po linii  
+Robot różnicowy z trackerem - autonomiczna jazda po wyznaczonej linii z regulatorem PID.
+
+---
+
+## 📚 Dokumentacja projektów
+
+### Projekt 1 - Pochylnia (Ball on Beam)
+- **Kod Arduino:** `RobotArduino.ino`
+- **Interfejs Python:** `ArduinoRobotPython.py`
+- **Dokumentacja:** Patrz sekcje poniżej
+
+### Projekt 2 - Line Follower
+- **Kod Arduino:** `LineFollowerPID.ino`
+- **Interfejs Python:** `ArduinoRobotPython.py` (rozszerzony)
+- **Quick Start:** `QuickStart.md`
+- **Pełna dokumentacja:** `README_LineFollower.md`
+- **Konfiguracje PID:** `PID_Configurations.md`
+- **Notatki techniczne:** `Technical_Notes.md`
+- **Szybkie ustawienia:** `QuickPIDConfig.py`
+
+---
+
+## 🎯 Projekt 1: System stabilizacji pochylni
 
 System ISS to platforma do testowania i demonstracji działania regulatora PID w czasie rzeczywistym. Urządzenie wykorzystuje czujnik IR do pomiaru odległości piłki na pochylni i dynamicznie reguluje kąt nachylenia za pomocą serwomechanizmu, aby utrzymać piłkę w zadanym punkcie.
 
