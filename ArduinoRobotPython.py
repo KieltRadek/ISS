@@ -83,6 +83,7 @@ class RobotInterface:
                         if line.startswith("NACK"):
                             print(line)
                             return None
+                        # Inne ramki (RESULT itp.) można ewentualnie wypisać
                         print(f"[FRAME] {line}")
                     else:
                         time.sleep(0.01)
@@ -153,6 +154,61 @@ class RobotInterface:
             print(f"Odległość: {response}")
         return response
     
+    def calibrate_tracker(self):
+        """Kalibracja trackera z oczekiwaniem na CALIBRATION_DONE"""
+        if not self.ser or not self.ser.is_open:
+            print("Brak połączenia")
+            return False
+        
+        checksum = self.calculate_checksum("CALIBRATE")
+        frame = f"CALIBRATE|{checksum}#"
+        
+        try:
+            self.ser.reset_input_buffer()
+            self.ser.reset_output_buffer()
+            
+            self.ser.write(frame.encode())
+            self.ser.flush()
+            self.log_message(f"TX: CALIBRATE|{checksum}")
+            
+            # Czekaj na CALIBRATE_START
+            start = time.time()
+            calibrate_started = False
+            while (time.time() - start) < 2.0:
+                if self.ser.in_waiting > 0:
+                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                    if not line:
+                        continue
+                    if "CALIBRATE_START" in line:
+                        calibrate_started = True
+                        print("✓ Rozpoczęto kalibrację - PRZESUWAJ ROBOTA TERAZ!")
+                        break
+                time.sleep(0.01)
+            
+            if not calibrate_started:
+                print("Błąd: Arduino nie odpowiedziało na kalibrację")
+                return False
+            
+            # Czekaj na CALIBRATION_DONE (aż 7 sekund)
+            start = time.time()
+            while (time.time() - start) < 7.0:
+                if self.ser.in_waiting > 0:
+                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                    if not line:
+                        continue
+                    if line.endswith('#'):
+                        self.log_message(f"RX: {line.strip('#')}")
+                        if "CALIBRATION_DONE" in line:
+                            return True
+                time.sleep(0.01)
+            
+            print("Timeout - kalibracja nie ukończona")
+            return False
+            
+        except Exception as e:
+            print(f"Błąd komunikacji: {e}")
+            return False
+    
     def start_exam_mode(self):
         """Uruchomienie trybu egzaminacyjnego"""
         response = self.send_command("EXAM_START")
@@ -170,6 +226,12 @@ class RobotInterface:
                     if line.startswith("RESULT"):
                         print(f"\n {line.strip('#')}")
                         return line
+                    elif line.endswith('#'):
+                        # Inne ramki - możesz je pokazać
+                        pass
+                    else:
+                        # Telemetria - możesz pokazać jeśli chcesz
+                        pass
                 else:
                     time.sleep(0.01)
             print("Timeout - brak wyniku")
@@ -346,21 +408,15 @@ class RobotInterface:
 
     def run(self):
         print("╔════════════════════════════════════════════╗")
-        print("║      INTERFEJS KOMUNIKACJI BLUETOOTH       ║")
-        print("║        (Line Follower Robot)               ║")
+        print("║      INTERFEJS KOMUNIKACJI PC-ARDUINO      ║")
         print("╚════════════════════════════════════════════╝")
         
         # Wybór portu
         ports = self.list_ports()
         if not ports:
             print("Brak dostępnych portów szeregowych")
-            print("\n⚠️  UWAGA: Sprawdź czy:")
-            print("  - Moduł Bluetooth jest włączony")
-            print("  - Arduino jest zasilane akumulatorem")
-            print("  - Bluetooth HC-05/HC-06 jest sparowany")
             return
         
-        print("\nWybierz port COM (zwykle COM3-COM6 dla Bluetooth):")
         try:
             choice = int(input("\nWybierz port (numer): ")) - 1
             port = ports[choice]
@@ -374,13 +430,12 @@ class RobotInterface:
         if not self.connect(port, baudrate):
             return
         
-        print("\n✅ Połączono przez Bluetooth!")
-        print("Wpisz 'help' aby zobaczyć dostępne komendy\n")
+        print("\nWpisz 'help' aby zobaczyć dostępne komendy\n")
         
         while True:
             try:
                 # Nieblokujący podgląd telemetrii między komendami
-                self.pump_telemetry()
+                self.pump_telemetry()  # <— tu drukuje DIST/ERR/OUT gdy test trwa
 
                 cmd = input("robot> ").strip()
                 if not cmd:
@@ -459,12 +514,12 @@ class RobotInterface:
                 elif command == 'p':
                     response = self.send_command("P")
                     if response:
-                        print("🚗 Tryb jazdy po linii WŁĄCZONY")
+                        print("Tryb jazdy po linii WŁĄCZONY")
                 
                 elif command == 's':
                     response = self.send_command("S")
                     if response:
-                        print("🛑 Robot ZATRZYMANY")
+                        print("Robot ZATRZYMANY")
                 
                 elif command == 'kp':
                     if len(parts) > 1:
@@ -472,7 +527,7 @@ class RobotInterface:
                             val = float(parts[1])
                             response = self.send_command(f"Kp {val}")
                             if response:
-                                print(f"✅ Kp ustawione na: {val}")
+                                print(f"Kp ustawione na: {val}")
                         except ValueError:
                             print("Błąd: Podaj wartość liczbową")
                     else:
@@ -480,7 +535,7 @@ class RobotInterface:
                         try:
                             response = self.send_command(f"Kp {float(val)}")
                             if response:
-                                print(f"✅ Kp ustawione na: {val}")
+                                print(f"Kp ustawione na: {val}")
                         except ValueError:
                             print("Błąd: Wartość musi być liczbą")
                 
@@ -490,7 +545,7 @@ class RobotInterface:
                             val = float(parts[1])
                             response = self.send_command(f"Ki {val}")
                             if response:
-                                print(f"✅ Ki ustawione na: {val}")
+                                print(f"Ki ustawione na: {val}")
                         except ValueError:
                             print("Błąd: Podaj wartość liczbową")
                     else:
@@ -498,7 +553,7 @@ class RobotInterface:
                         try:
                             response = self.send_command(f"Ki {float(val)}")
                             if response:
-                                print(f"✅ Ki ustawione na: {val}")
+                                print(f"Ki ustawione na: {val}")
                         except ValueError:
                             print("Błąd: Wartość musi być liczbą")
                 
@@ -508,7 +563,7 @@ class RobotInterface:
                             val = float(parts[1])
                             response = self.send_command(f"Kd {val}")
                             if response:
-                                print(f"✅ Kd ustawione na: {val}")
+                                print(f"Kd ustawione na: {val}")
                         except ValueError:
                             print("Błąd: Podaj wartość liczbową")
                     else:
@@ -516,7 +571,7 @@ class RobotInterface:
                         try:
                             response = self.send_command(f"Kd {float(val)}")
                             if response:
-                                print(f"✅ Kd ustawione na: {val}")
+                                print(f"Kd ustawione na: {val}")
                         except ValueError:
                             print("Błąd: Wartość musi być liczbą")
                 
@@ -526,7 +581,7 @@ class RobotInterface:
                             val = int(parts[1])
                             response = self.send_command(f"Vref {val}")
                             if response:
-                                print(f"✅ Vref ustawione na: {val}")
+                                print(f"Vref ustawione na: {val}")
                         except ValueError:
                             print("Błąd: Podaj wartość całkowitą (0-255)")
                     else:
@@ -534,7 +589,7 @@ class RobotInterface:
                         try:
                             response = self.send_command(f"Vref {int(val)}")
                             if response:
-                                print(f"✅ Vref ustawione na: {val}")
+                                print(f"Vref ustawione na: {val}")
                         except ValueError:
                             print("Błąd: Wartość musi być liczbą całkowitą")
                 
@@ -543,31 +598,46 @@ class RobotInterface:
                         val = int(parts[1])
                         response = self.send_command(f"T {val}")
                         if response:
-                            print(f"✅ Okres próbkowania ustawiony na: {val} ms")
+                            print(f"Okres próbkowania ustawiony na: {val} ms")
                     except ValueError:
                         print("Błąd: Podaj wartość całkowitą (50-300)")
                 
                 elif command == 'calibrate':
-                    print("📏 Kalibracja trackera - przesuwaj robota nad linią...")
-                    response = self.send_command("CALIBRATE")
-                    if response:
-                        print("✅ Kalibracja zakończona")
+                    print("\n" + "="*60)
+                    print("KALIBRACJA TRACKERA - INSTRUKCJA:")
+                    print("="*60)
+                    print("1. Postaw robota nad BIAŁYM POLEM")
+                    print("2. Wciśnij ENTER aby zacząć")
+                    print("3. Przez 5 sekund PRZESUWAJ ROBOTA:")
+                    print("   - Na linię czarną (sensory nad czarną linią)")
+                    print("   - Na białe pole (sensory nad białą kartką)")
+                    print("   - Powtarzaj aby czujnik się nauczył różnicy")
+                    print("="*60 + "\n")
+                    input("Gotów? Wciśnij ENTER...")
+                    
+                    print("Wysyłanie komendy kalibracji...")
+                    success = self.calibrate_tracker()
+                    if success:
+                        print("✓ Kalibracja zakończona!")
+                        print("Robot nauczył się rozpoznawać linię.\n")
+                    else:
+                        print("✗ Kalibracja nie powiodła się. Spróbuj ponownie.\n")
                 
                 elif command == 'read-line':
                     response = self.send_command("READ_LINE")
                     if response:
-                        print(f"📍 Pozycja linii: {response}")
+                        print(f"Pozycja linii: {response}")
                 
                 elif command == 'telemetry-on':
                     response = self.send_command("TELEMETRY_ON")
                     if response:
-                        print("📊 Telemetria WŁĄCZONA")
+                        print("Telemetria WŁĄCZONA")
                         self.telemetry_enabled = True
                 
                 elif command == 'telemetry-off':
                     response = self.send_command("TELEMETRY_OFF")
                     if response:
-                        print("📊 Telemetria WYŁĄCZONA")
+                        print("Telemetria WYŁĄCZONA")
                         self.telemetry_enabled = False
 
                 else:

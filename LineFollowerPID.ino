@@ -4,8 +4,8 @@
 
 // Piny silników
 #define PIN_LEFT_MOTOR_SPEED 5
-#define PIN_LEFT_MOTOR_FORWARD A0            
-#define PIN_LEFT_MOTOR_REVERSE A1
+#define PIN_LEFT_MOTOR_FORWARD A1           
+#define PIN_LEFT_MOTOR_REVERSE A0
 #define PIN_LEFT_ENCODER 2
    
 #define PIN_RIGHT_MOTOR_SPEED 6
@@ -23,9 +23,9 @@ volatile int left_encoder_count = 0;
 volatile int right_encoder_count = 0;
 
 // Parametry PID
-float Kp = 20.0;
+float Kp = 60.0;   // Zmniejszone dla lepszej stabilności na ostrych zakrętach
 float Ki = 0.0;
-float Kd = 5.0;
+float Kd = 12.0;   // Zwiększone dla lepszego tłumienia na zakrętach
 float integral = 0.0;
 float previousError = 0.0;
 float derivative = 0.0;
@@ -35,9 +35,12 @@ float filteredDerivative = 0.0;
 float alpha = 0.7;  // Współczynnik filtra (0-1), mniejszy = bardziej wygładzone
 
 // Parametry sterowania
-int Vref = 100;  // Prędkość bazowa (0-255)
+int Vref = 70;    // Zmniejszona prędkość dla lepszej kontroli na ostrych zakrętach
 int T_sample = 100;  // Okres próbkowania w ms (50-300ms)
 unsigned long lastPIDTime = 0;
+
+// Detekcja linii
+#define LINE_THRESHOLD 200  // Próg detekcji czujnika (0-1000, im wyżej tym bardziej czułe)
 
 // Ograniczenia
 #define MAX_INTEGRAL 1000.0
@@ -52,12 +55,6 @@ String inputBuffer = "";
 bool telemetryEnabled = false;
 unsigned long lastTelemetryTime = 0;
 #define TELEMETRY_INTERVAL 200
-
-// Bluetooth - używamy standardowego Serial (pin 0,1)
-// HC-05/HC-06 podłączony do TX(1)/RX(0) Arduino
-// Jeśli chcesz debugowanie przez USB podczas testów, 
-// rozkomentuj poniżej i podłącz USB obok Bluetooth
-// (ale nie jednocześnie!)
 
 // ========================= FUNKCJE POMOCNICZE =========================
 
@@ -120,12 +117,12 @@ void setMotors(int leftPWM, int rightPWM) {
   
   // Prawy silnik
   if (rightPWM >= 0) {
-    digitalWrite(PIN_RIGHT_MOTOR_FORWARD, LOW);
-    digitalWrite(PIN_RIGHT_MOTOR_REVERSE, HIGH);
-    analogWrite(PIN_RIGHT_MOTOR_SPEED, constrain(rightPWM, MIN_PWM, MAX_PWM));
-  } else {
     digitalWrite(PIN_RIGHT_MOTOR_FORWARD, HIGH);
     digitalWrite(PIN_RIGHT_MOTOR_REVERSE, LOW);
+    analogWrite(PIN_RIGHT_MOTOR_SPEED, constrain(rightPWM, MIN_PWM, MAX_PWM));
+  } else {
+    digitalWrite(PIN_RIGHT_MOTOR_FORWARD, LOW);
+    digitalWrite(PIN_RIGHT_MOTOR_REVERSE, HIGH);
     analogWrite(PIN_RIGHT_MOTOR_SPEED, constrain(-rightPWM, MIN_PWM, MAX_PWM));
   }
 }
@@ -136,9 +133,32 @@ void stopMotors() {
   analogWrite(PIN_RIGHT_MOTOR_SPEED, 0);
 }
 
+// Detekcja linii - sprawdza czy linia jest widoczna
+bool isLineDetected() {
+  // Czyta wartości czujników (0-1000, im wyżej tym ciemniej)
+  trs.readLine(sensorValues);
+  
+  // Sprawdza czy przynajmniej jeden czujnik widzi linię
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    if (sensorValues[i] > LINE_THRESHOLD) {
+      return true;  // Linia znaleziona
+    }
+  }
+  return false;  // Brak linii
+}
+
 // ========================= REGULATOR PID =========================
 
 void computePID() {
+  // Sprawdzenie czy linia jest widoczna
+  if (!isLineDetected()) {
+    stopMotors();  // Zatrzymaj silniki jeśli brak linii
+    previousError = 0.0;
+    integral = 0.0;
+    filteredDerivative = 0.0;
+    return;
+  }
+  
   // Odczyt pozycji linii (0-4000, środek = 2000)
   unsigned int position = trs.readLine(sensorValues);
   
@@ -295,11 +315,18 @@ void parseCommand(String frame) {
   
   // CALIBRATE - kalibracja trackera
   else if (cmd == "CALIBRATE") {
-    sendResponse("ACK|CALIBRATING");
-    for (int i = 0; i < 100; i++) {
+    // Wyślij komunikat start
+    sendResponse("ACK|CALIBRATE_START");
+    delay(100);
+    
+    // Kalibracja przez 5 sekund - przesuwaj robota nad linią i białym polem
+    unsigned long calibStart = millis();
+    while (millis() - calibStart < 5000) {
       trs.calibrate();
-      delay(10);
+      delay(20);
     }
+    
+    // Wyślij komunikat koniec
     sendResponse("ACK|CALIBRATION_DONE");
   }
   
@@ -341,12 +368,8 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(PIN_LEFT_ENCODER), left_encoder, RISING);
   attachInterrupt(digitalPinToInterrupt(PIN_RIGHT_ENCODER), right_encoder, RISING);
   
-  // Wstępna kalibracja trackera
-  // UWAGA: Przed pierwszym użyciem uruchom komendę CALIBRATE
-  // podczas przesuwania robota nad linią
-  for (int i = 0; i < 100; i++) {
-    trs.calibrate();
-  }
+  // Kalibracja trackera - oczekiwanie na kalibrację z PC
+  delay(1000);
   
   lastPIDTime = millis();
   
