@@ -53,6 +53,12 @@ bool telemetryEnabled = false;
 unsigned long lastTelemetryTime = 0;
 #define TELEMETRY_INTERVAL 200
 
+// Bluetooth - używamy standardowego Serial (pin 0,1)
+// HC-05/HC-06 podłączony do TX(1)/RX(0) Arduino
+// Jeśli chcesz debugowanie przez USB podczas testów, 
+// rozkomentuj poniżej i podłącz USB obok Bluetooth
+// (ale nie jednocześnie!)
+
 // ========================= FUNKCJE POMOCNICZE =========================
 
 void left_encoder() {

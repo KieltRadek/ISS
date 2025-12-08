@@ -7,7 +7,20 @@ Repozytorium zawiera dwa projekty demonstrujące zastosowanie regulatorów PID w
 System sterowania pochylnią z regulatorem PID - utrzymywanie piłki w zadanym punkcie.
 
 ### 🤖 Projekt 2: Robot jadący po linii  
-Robot różnicowy z trackerem - autonomiczna jazda po wyznaczonej linii z regulatorem PID.
+Robot różnicowy z trackerem - autonomiczna jazda po wyznaczonej linii z regulatorem PID.  
+**Status:** ✅ Gotowy z Bluetooth!
+
+---
+
+## 🚀 SZYBKI START
+
+**Zaczynasz z Projektem 2?**
+→ **[`START_HERE.md`](START_HERE.md)** (przeczytaj najpierw!)
+
+```bash
+python ArduinoRobotPython.py
+# Wybierz Bluetooth port → calibrate → P (START!)
+```
 
 ---
 
@@ -16,16 +29,19 @@ Robot różnicowy z trackerem - autonomiczna jazda po wyznaczonej linii z regula
 ### Projekt 1 - Pochylnia (Ball on Beam)
 - **Kod Arduino:** `RobotArduino.ino`
 - **Interfejs Python:** `ArduinoRobotPython.py`
-- **Dokumentacja:** Patrz sekcje poniżej
 
-### Projekt 2 - Line Follower
-- **Kod Arduino:** `LineFollowerPID.ino`
-- **Interfejs Python:** `ArduinoRobotPython.py` (rozszerzony)
-- **Quick Start:** `QuickStart.md`
-- **Pełna dokumentacja:** `README_LineFollower.md`
-- **Konfiguracje PID:** `PID_Configurations.md`
-- **Notatki techniczne:** `Technical_Notes.md`
-- **Szybkie ustawienia:** `QuickPIDConfig.py`
+### Projekt 2 - Line Follower (Bluetooth Ready!)
+- 🌟 **[START_HERE.md](START_HERE.md)** - *Przeczytaj najpierw!*
+- 🚀 **[QuickStart_Bluetooth.md](QuickStart_Bluetooth.md)** - Uruchomienie w 5 min
+- 📌 **Kod:** `LineFollowerPID.ino` + `ArduinoRobotPython.py`
+- 🔧 **Setup:** `Bluetooth_Setup_Guide.md`
+- 🔴 **Problemy?** `Bluetooth_Diagnostics.md`
+- 📖 **Pełna док:** `README_LineFollower.md`
+- ⚙️ **Konfiguracje:** `PID_Configurations.md`
+- 📊 **Komendy:** `Command_Reference.md`
+- 🔌 **Podłączenie:** `Wiring_Diagram.md`
+- 📚 **Teoria:** `Technical_Notes.md`
+- 🛠️ **Narzędzia:** `QuickPIDConfig.py`, `TestSuite.py`
 
 ---
 
