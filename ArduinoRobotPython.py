@@ -12,7 +12,7 @@ class RobotInterface:
         self.history = []
         self.timeout = 1.0
         self.max_retries = 3
-        self.connected = False
+        self. connected = False
         self.telemetry_enabled = False  
         
     def calculate_checksum(self, cmd):
@@ -39,8 +39,8 @@ class RobotInterface:
     
     def watchdog_test(self):
         response = self.send_command("PING", retries=1)
-        if response and "PONG" in response:
-            print("Watchdog: Połączenie aktywne")
+        if response and "PONG" in response: 
+            print("Watchdog:  Połączenie aktywne")
             return True
         else:
             print("Watchdog: Brak odpowiedzi")
@@ -63,7 +63,7 @@ class RobotInterface:
                 
                 self.ser.write(frame.encode())
                 self.ser.flush()
-                self.log_message(f"TX: {frame.strip('#')}")
+                self.log_message(f"TX: {frame. strip('#')}")
                 
                 start = time.time()
                 while (time.time() - start) < self.timeout:
@@ -77,13 +77,13 @@ class RobotInterface:
                                 print(line)
                             continue
                         # Ramka z '#'
-                        self.log_message(f"RX: {line.strip('#')}")
+                        self.log_message(f"RX: {line. strip('#')}")
                         if line.startswith("ACK"):
-                            return line.strip('#')
+                            return line. strip('#')
                         if line.startswith("NACK"):
                             print(line)
                             return None
-                        # Inne ramki (RESULT itp.) można ewentualnie wypisać
+                        # Inne ramki (RESULT itp.)
                         print(f"[FRAME] {line}")
                     else:
                         time.sleep(0.01)
@@ -91,60 +91,79 @@ class RobotInterface:
                 print(f"Timeout (próba {attempt+1}/{retries})")
                 time.sleep(0.1)
                     
-            except Exception as e:
+            except Exception as e: 
                 print(f"Błąd komunikacji: {e}")
         
         print("Brak odpowiedzi po wszystkich próbach")
         return None
     
-    
     def log_message(self, msg):
-        timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        timestamp = datetime.now().strftime("%H:%M:%S. %f")[:-3]
         self.log.append(f"[{timestamp}] {msg}")
     
+    # ========================= PROJEKT 4 - FUNKCJE =========================
     
-    def configure(self, config_dict):
-        cfg_str = ",".join([f"{k}={v}" for k, v in config_dict.items()])
-        response = self.send_command(f"CFG({cfg_str})")
-        if response:
-            print(f"Konfiguracja zastosowana: {cfg_str}")
+    def start_wall_approach(self):
+        """Uruchomienie jazdy do ściany"""
+        response = self.send_command("START")
+        if response: 
+            print("✓ Jazda do ściany uruchomiona")
+            self.telemetry_enabled = True
         return response
     
-    def start_test_mode(self, auto_monitor=False, seconds=0):
-        """Uruchomienie trybu testowego; od teraz telemetria leci ciągle aż do TEST_STOP."""
-        response = self.send_command("TEST_START")
+    def stop_wall_approach(self):
+        """Zatrzymanie jazdy do ściany"""
+        response = self.send_command("STOP")
         if response:
-            print("Tryb testowy uruchomiony")
-            self.telemetry_enabled = True   # <— telemetria on
+            print("✓ Robot zatrzymany")
+            self.telemetry_enabled = False
         return response
     
-    def stop_test_mode(self):
-        """Zatrzymanie trybu testowego"""
-        response = self.send_command("TEST_STOP")
-        if response:
-            print("Tryb testowy zatrzymany")
-            self.telemetry_enabled = False  # <— telemetria off
-        return response
+    def set_pid_left(self, kp=None, ki=None, kd=None):
+        """Ustaw parametry PID lewego koła"""
+        results = []
+        if kp is not None:
+            response = self.send_command(f"KP_L {kp}")
+            if response:
+                print(f"✓ Kp_left = {kp}")
+                results. append(response)
+        if ki is not None:
+            response = self.send_command(f"KI_L {ki}")
+            if response:
+                print(f"✓ Ki_left = {ki}")
+                results.append(response)
+        if kd is not None: 
+            response = self.send_command(f"KD_L {kd}")
+            if response: 
+                print(f"✓ Kd_left = {kd}")
+                results.append(response)
+        return results
     
-    def set_target(self, distance_cm):
-        """Ustawienie punktu docelowego"""
-        response = self.send_command(f"SET_TARGET({distance_cm})")
-        if response:
-            print(f"Target ustawiony na: {distance_cm} cm")
-        return response
+    def set_pid_right(self, kp=None, ki=None, kd=None):
+        """Ustaw parametry PID prawego koła"""
+        results = []
+        if kp is not None: 
+            response = self.send_command(f"KP_R {kp}")
+            if response: 
+                print(f"✓ Kp_right = {kp}")
+                results.append(response)
+        if ki is not None:
+            response = self.send_command(f"KI_R {ki}")
+            if response:
+                print(f"✓ Ki_right = {ki}")
+                results.append(response)
+        if kd is not None:
+            response = self.send_command(f"KD_R {kd}")
+            if response:
+                print(f"✓ Kd_right = {kd}")
+                results.append(response)
+        return results
     
-    def set_servo_zero(self, angle):
-        """Ustawienie wartości zero serwomechanizmu"""
-        response = self.send_command(f"SET_SERVO_ZERO({angle})")
+    def set_vmax(self, vmax):
+        """Ustaw prędkość maksymalną"""
+        response = self.send_command(f"VMAX {vmax}")
         if response:
-            print(f"Servo zero ustawione na: {angle} stopni")
-        return response
-    
-    def get_status(self):
-        """Odczyt parametrów z Arduino"""
-        response = self.send_command("STATUS")
-        if response:
-            print(f"Parametry: {response}")
+            print(f"✓ V_max = {vmax}")
         return response
     
     def read_distance(self):
@@ -154,183 +173,109 @@ class RobotInterface:
             print(f"Odległość: {response}")
         return response
     
-    def calibrate_tracker(self):
-        """Kalibracja trackera z oczekiwaniem na CALIBRATION_DONE"""
-        if not self.ser or not self.ser.is_open:
-            print("Brak połączenia")
-            return False
-        
-        checksum = self.calculate_checksum("CALIBRATE")
-        frame = f"CALIBRATE|{checksum}#"
-        
-        try:
-            self.ser.reset_input_buffer()
-            self.ser.reset_output_buffer()
-            
-            self.ser.write(frame.encode())
-            self.ser.flush()
-            self.log_message(f"TX: CALIBRATE|{checksum}")
-            
-            # Czekaj na CALIBRATE_START
-            start = time.time()
-            calibrate_started = False
-            while (time.time() - start) < 2.0:
-                if self.ser.in_waiting > 0:
-                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
-                    if not line:
-                        continue
-                    if "CALIBRATE_START" in line:
-                        calibrate_started = True
-                        print("✓ Rozpoczęto kalibrację - PRZESUWAJ ROBOTA TERAZ!")
-                        break
-                time.sleep(0.01)
-            
-            if not calibrate_started:
-                print("Błąd: Arduino nie odpowiedziało na kalibrację")
-                return False
-            
-            # Czekaj na CALIBRATION_DONE (aż 7 sekund)
-            start = time.time()
-            while (time.time() - start) < 7.0:
-                if self.ser.in_waiting > 0:
-                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
-                    if not line:
-                        continue
-                    if line.endswith('#'):
-                        self.log_message(f"RX: {line.strip('#')}")
-                        if "CALIBRATION_DONE" in line:
-                            return True
-                time.sleep(0.01)
-            
-            print("Timeout - kalibracja nie ukończona")
-            return False
-            
-        except Exception as e:
-            print(f"Błąd komunikacji: {e}")
-            return False
-    
-    def start_exam_mode(self):
-        """Uruchomienie trybu egzaminacyjnego"""
-        response = self.send_command("EXAM_START")
+    def get_status(self):
+        """Odczyt parametrów z Arduino"""
+        response = self.send_command("STATUS")
         if response:
-            print("Tryb egzaminacyjny uruchomiony")
-            print("Oczekiwanie na wynik (13s)...")
-            
-            # Czekaj na RESULT przez max 15s
-            start = time.time()
-            while (time.time() - start) < 15:
-                if self.ser.in_waiting > 0:
-                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
-                    if not line:
-                        continue
-                    if line.startswith("RESULT"):
-                        print(f"\n {line.strip('#')}")
-                        return line
-                    elif line.endswith('#'):
-                        # Inne ramki - możesz je pokazać
-                        pass
+            print(f"Parametry: {response}")
+        return response
+    
+    def interactive_config_wheels(self):
+        """Interaktywna konfiguracja PID kół"""
+        print("\n=== KONFIGURACJA PID KÓŁ ===")
+        
+        print("\n--- LEWE KOŁO ---")
+        kp_l = input("Kp_left [2.0]:  ").strip()
+        kp_l = float(kp_l) if kp_l else 2.0
+        
+        ki_l = input("Ki_left [0.5]: ").strip()
+        ki_l = float(ki_l) if ki_l else 0.5
+        
+        kd_l = input("Kd_left [0.1]: ").strip()
+        kd_l = float(kd_l) if kd_l else 0.1
+        
+        print("\n--- PRAWE KOŁO ---")
+        kp_r = input("Kp_right [2.0]: ").strip()
+        kp_r = float(kp_r) if kp_r else 2.0
+        
+        ki_r = input("Ki_right [0.5]: ").strip()
+        ki_r = float(ki_r) if ki_r else 0.5
+        
+        kd_r = input("Kd_right [0.1]: ").strip()
+        kd_r = float(kd_r) if kd_r else 0.1
+        
+        print("\n--- PRĘDKOŚĆ ---")
+        vmax = input("V_max [50. 0]: ").strip()
+        vmax = float(vmax) if vmax else 50.0
+        
+        print("\nWysyłanie konfiguracji...")
+        self.set_pid_left(kp_l, ki_l, kd_l)
+        self.set_pid_right(kp_r, ki_r, kd_r)
+        self.set_vmax(vmax)
+        print("\n✓ Konfiguracja zakończona")
+    
+    def pump_telemetry(self):
+        """Nieblokujące wypompowanie dostępnych linii."""
+        if not self.ser or not self. ser.is_open:
+            return
+        try:
+            while self.ser.in_waiting > 0:
+                line = self. ser.readline().decode('utf-8', errors='ignore').strip()
+                if not line:
+                    continue
+                if line.endswith('#'):
+                    print(f"[FRAME] {line}")
+                else:
+                    if self.telemetry_enabled:
+                        print(line)
+        except Exception: 
+            pass
+
+    def monitor(self, seconds=0):
+        """Podgląd telemetrii.  seconds=0 => bez limitu, Ctrl+C aby przerwać."""
+        if not self.ser or not self. ser.is_open:
+            print("Brak połączenia")
+            return
+        print("Monitor telemetrii:  uruchom START na Arduino.  Ctrl+C aby przerwać.")
+        deadline = time.time() + seconds if seconds > 0 else None
+        try:
+            while deadline is None or time.time() < deadline:
+                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                if line:
+                    if line.endswith('#') or line.startswith(('ACK', 'NACK')):
+                        print(f"[FRAME] {line}")
                     else:
-                        # Telemetria - możesz pokazać jeśli chcesz
-                        pass
+                        print(line)
                 else:
                     time.sleep(0.01)
-            print("Timeout - brak wyniku")
-        return response
-
-    def interactive_config(self):
-        print("\n=== KONFIGURACJA ROBOTA ===")
-        
-        config = {}
-
-        while True:
-            distance = input("distance_point (cm) = ").strip()
-            try:
-                distance_val = float(distance)
-                config['DIST_POINT'] = distance_val
-                break
-            except ValueError:
-                print("Błąd: Wprowadź wartość liczbową")
-
-        while True:
-            kp = input("kp = ").strip()
-            try:
-                kp_val = float(kp)
-                config['KP'] = kp_val
-                break
-            except ValueError:
-                print("Błąd: Wprowadź wartość liczbową")
-
-        while True:
-            ki = input("ki = ").strip()
-            try:
-                ki_val = float(ki)
-                config['KI'] = ki_val
-                break
-            except ValueError:
-                print("Błąd: Wprowadź wartość liczbową")
-
-        while True:
-            kd = input("kd = ").strip()
-            try:
-                kd_val = float(kd)
-                config['KD'] = kd_val
-                break
-            except ValueError:
-                print("Błąd: Wprowadź wartość liczbową")
-
-        while True:
-            servo_zero = input("servo_zero (stopnie) = ").strip()
-            try:
-                servo_zero_val = int(servo_zero)
-                config['SERVO_ZERO'] = servo_zero_val
-                break
-            except ValueError:
-                print("Błąd: Wprowadź wartość całkowitą")
-        
-        while True:
-            t = input("t (ms, pętla PID) = ").strip()
-            try:
-                t_val = int(t)
-                config['T'] = t_val
-                break
-            except ValueError:
-                print("Błąd: Wprowadź wartość całkowitą")
-
-        if config:
-            self.configure(config)
+        except KeyboardInterrupt:
+            pass
     
     def show_help(self):
         print("""
 ╔════════════════════════════════════════════════════════════╗
-║           INTERFEJS KOMUNIKACJI PC-ARDUINO                 ║
+║      INTERFEJS PROJEKT 4 - JAZDA DO ŚCIANY (PID+FUZZY)     ║
 ╠════════════════════════════════════════════════════════════╣
-║ STEROWANIE ROBOTEM (JAZDA PO LINII):                       ║
-║   P             - Włącz tryb jazdy po linii                ║
-║   S             - Zatrzymaj robota                         ║
-║   kp <val>      - Ustaw parametr Kp (np. kp 20)            ║
-║   ki <val>      - Ustaw parametr Ki (np. ki 0.5)           ║
-║   kd <val>      - Ustaw parametr Kd (np. kd 5)             ║
-║   vref <val>    - Ustaw prędkość bazową (0-255)            ║
-║   t <ms>        - Ustaw okres próbkowania (50-300ms)       ║
+║ STEROWANIE ROBOTEM:                                        ║
+║   start         - Uruchom jazdę do ściany                  ║
+║   stop          - Zatrzymaj robota                         ║
+║   config        - Konfiguruj parametry PID kół             ║
+║   kp-l <val>    - Ustaw Kp lewego koła                     ║
+║   ki-l <val>    - Ustaw Ki lewego koła                     ║
+║   kd-l <val>    - Ustaw Kd lewego koła                     ║
+║   kp-r <val>    - Ustaw Kp prawego koła                    ║
+║   ki-r <val>    - Ustaw Ki prawego koła                    ║
+║   kd-r <val>    - Ustaw Kd prawego koła                    ║
+║   vmax <val>    - Ustaw prędkość maksymalną                ║
 ║                                                            ║
-║ KALIBRACJA I DIAGNOSTYKA:                                  ║
-║   calibrate     - Kalibruj tracker (przesuwaj nad linią)   ║
-║   read-line     - Odczyt pozycji linii                     ║
-║   status        - Status i parametry PID                   ║
-║   telemetry-on  - Włącz telemetrię (POS/ERR/OUT)           ║
+║ DIAGNOSTYKA:                                               ║
+║   status        - Status i parametry robota                ║
+║   read-dist     - Jednorazowy pomiar odległości            ║
+║   telemetry-on  - Włącz telemetrię (DIST/VREF/PWM)         ║
 ║   telemetry-off - Wyłącz telemetrię                        ║
 ║   monitor [s]   - Monitor telemetrii (opcjonalnie s sek)   ║
 ║                                                            ║
-║ POCHYLNIA (PROJEKT 1):                                     ║
-║   cfg           - Konfiguruj PID pochylni                  ║
-║   set-target    - Ustaw punkt docelowy (cm)                ║
-║   set-servo     - Ustaw servo zero (stopnie)               ║
-║   test-start    - Uruchom tryb testowy pochylni            ║
-║   test-stop     - Zatrzymaj tryb testowy                   ║
-║   exam          - Uruchom tryb egzaminacyjny (13s)         ║
-║   read-dist     - Jednorazowy pomiar odległości            ║
-║                                                            ║
-║ SYSTEM:                                                    ║
+║ SYSTEM:                                                     ║
 ║   help          - Ta pomoc                                 ║
 ║   history       - Historia komend                          ║
 ║   save-log      - Zapisz log do pliku                      ║
@@ -351,64 +296,24 @@ class RobotInterface:
     
     def show_history(self):
         print("\n=== HISTORIA KOMEND ===")
-        for i, cmd in enumerate(self.history[-10:], 1):
+        for i, cmd in enumerate(self. history[-10:], 1):
             print(f"{i}. {cmd}")
     
     def save_log(self):
         filename = f"robot_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         try:
             with open(filename, 'w', encoding='utf-8') as f:
-                f.write(f"=== LOG KOMUNIKACJI ROBOT ARDUINO ===\n")
+                f.write(f"=== LOG KOMUNIKACJI ROBOT ARDUINO - PROJEKT 4 ===\n")
                 f.write(f"Data: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
                 for entry in self.log:
                     f.write(entry + '\n')
-            print(f"Log zapisany do: {filename}")
+            print(f"Log zapisany do:  {filename}")
         except Exception as e:
             print(f"Błąd zapisu: {e}")
 
-    def pump_telemetry(self):
-        """Nieblokujące wypompowanie dostępnych linii. Drukuje tylko telemetrię bez '#'. """
-        if not self.ser or not self.ser.is_open:
-            return
-        try:
-            # Czytaj dopóki coś jest w buforze
-            while self.ser.in_waiting > 0:
-                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
-                if not line:
-                    continue
-                if line.endswith('#'):
-                    # Ramki – można pokazać jako informację
-                    print(f"[FRAME] {line}")
-                else:
-                    if self.telemetry_enabled:
-                        print(line)
-        except Exception:
-            pass
-
-    def monitor(self, seconds=0):
-        """Podgląd telemetrii (DIST/ERR/OUT). seconds=0 => bez limitu, Ctrl+C aby przerwać."""
-        if not self.ser or not self.ser.is_open:
-            print("Brak połączenia")
-            return
-        print("Monitor telemetrii: uruchom TEST_START na Arduino. Ctrl+C aby przerwać.")
-        deadline = time.time() + seconds if seconds > 0 else None
-        try:
-            while deadline is None or time.time() < deadline:
-                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
-                if line:
-                    # Ramki z # pokazuj jako [FRAME], reszta to telemetria
-                    if line.endswith('#') or line.startswith(('ACK', 'NACK', 'RESULT')):
-                        print(f"[FRAME] {line}")
-                    else:
-                        print(line)
-                else:
-                    time.sleep(0.01)
-        except KeyboardInterrupt:
-            pass
-
     def run(self):
         print("╔════════════════════════════════════════════╗")
-        print("║      INTERFEJS KOMUNIKACJI PC-ARDUINO      ║")
+        print("║   PROJEKT 4 - JAZDA DO ŚCIANY (PID+FUZZY) ║")
         print("╚════════════════════════════════════════════╝")
         
         # Wybór portu
@@ -420,7 +325,7 @@ class RobotInterface:
         try:
             choice = int(input("\nWybierz port (numer): ")) - 1
             port = ports[choice]
-        except:
+        except: 
             print("Nieprawidłowy wybór")
             return
         
@@ -435,7 +340,7 @@ class RobotInterface:
         while True:
             try:
                 # Nieblokujący podgląd telemetrii między komendami
-                self.pump_telemetry()  # <— tu drukuje DIST/ERR/OUT gdy test trwa
+                self.pump_telemetry()
 
                 cmd = input("robot> ").strip()
                 if not cmd:
@@ -443,17 +348,18 @@ class RobotInterface:
                 
                 self.history.append(cmd)
                 parts = cmd.split()
-                command = parts[0].lower()
+                command = parts[0]. lower()
                 
                 if command == 'quit' or command == 'q':
                     print("Zamykanie połączenia...")
                     break
                 
-                elif command == 'help' or command == 'h':
+                elif command == 'help' or command == 'h': 
                     self.show_help()
                 
-                elif command == 'status':
+                elif command == 'status': 
                     self.show_status()
+                    self.get_status()
                 
                 elif command == 'history':
                     self.show_history()
@@ -461,172 +367,108 @@ class RobotInterface:
                 elif command == 'save-log':
                     self.save_log()
                 
-                elif command == 'cfg':
-                    self.interactive_config()
+                elif command == 'config':
+                    self.interactive_config_wheels()
                 
-                elif command == 'set-target':
+                elif command == 'start':
+                    self.start_wall_approach()
+                
+                elif command == 'stop': 
+                    self.stop_wall_approach()
+                
+                elif command == 'kp-l': 
                     if len(parts) > 1:
                         try:
-                            distance = float(parts[1])
-                            self.set_target(distance)
+                            self.set_pid_left(kp=float(parts[1]))
                         except ValueError:
-                            print("Błąd: Podaj wartość liczbową (cm)")
-                    else:
-                        distance = input("Podaj odległość docelową (cm): ").strip()
+                            print("Błąd: Podaj wartość liczbową")
+                    else: 
+                        val = input("Podaj wartość Kp_left: ").strip()
                         try:
-                            self.set_target(float(distance))
+                            self.set_pid_left(kp=float(val))
                         except ValueError:
                             print("Błąd: Wartość musi być liczbą")
                 
-                elif command == 'set-servo':
+                elif command == 'ki-l':
                     if len(parts) > 1:
                         try:
-                            angle = int(parts[1])
-                            self.set_servo_zero(angle)
+                            self.set_pid_left(ki=float(parts[1]))
                         except ValueError:
-                            print("Błąd: Podaj wartość całkowitą (stopnie)")
+                            print("Błąd:  Podaj wartość liczbową")
                     else:
-                        angle = input("Podaj kąt servo zero (stopnie): ").strip()
+                        val = input("Podaj wartość Ki_left: ").strip()
                         try:
-                            self.set_servo_zero(int(angle))
+                            self.set_pid_left(ki=float(val))
                         except ValueError:
-                            print("Błąd: Wartość musi być liczbą całkowitą")
+                            print("Błąd:  Wartość musi być liczbą")
                 
-                elif command == 'test-start':
-                    self.start_test_mode()
-                elif command == 'test-stop':
-                    self.stop_test_mode()
-
-                elif command == 'monitor':
-                    secs = int(parts[1]) if len(parts) > 1 else 0
-                    self.monitor(secs)
+                elif command == 'kd-l': 
+                    if len(parts) > 1:
+                        try: 
+                            self.set_pid_left(kd=float(parts[1]))
+                        except ValueError:
+                            print("Błąd: Podaj wartość liczbową")
+                    else:
+                        val = input("Podaj wartość Kd_left: ").strip()
+                        try:
+                            self.set_pid_left(kd=float(val))
+                        except ValueError:
+                            print("Błąd:  Wartość musi być liczbą")
                 
-                elif command == 'exam':
-                    self.start_exam_mode()
+                elif command == 'kp-r': 
+                    if len(parts) > 1:
+                        try: 
+                            self.set_pid_right(kp=float(parts[1]))
+                        except ValueError:
+                            print("Błąd: Podaj wartość liczbową")
+                    else:
+                        val = input("Podaj wartość Kp_right: ").strip()
+                        try:
+                            self.set_pid_right(kp=float(val))
+                        except ValueError:
+                            print("Błąd:  Wartość musi być liczbą")
                 
-                elif command == 'params':
-                    self.get_status()
+                elif command == 'ki-r':
+                    if len(parts) > 1:
+                        try: 
+                            self.set_pid_right(ki=float(parts[1]))
+                        except ValueError: 
+                            print("Błąd: Podaj wartość liczbową")
+                    else:
+                        val = input("Podaj wartość Ki_right: ").strip()
+                        try:
+                            self.set_pid_right(ki=float(val))
+                        except ValueError:
+                            print("Błąd: Wartość musi być liczbą")
+                
+                elif command == 'kd-r':
+                    if len(parts) > 1:
+                        try:
+                            self.set_pid_right(kd=float(parts[1]))
+                        except ValueError:
+                            print("Błąd:  Podaj wartość liczbową")
+                    else:
+                        val = input("Podaj wartość Kd_right:  ").strip()
+                        try:
+                            self.set_pid_right(kd=float(val))
+                        except ValueError:
+                            print("Błąd: Wartość musi być liczbą")
+                
+                elif command == 'vmax':
+                    if len(parts) > 1:
+                        try:
+                            self.set_vmax(float(parts[1]))
+                        except ValueError:
+                            print("Błąd: Podaj wartość liczbową")
+                    else:
+                        val = input("Podaj V_max: ").strip()
+                        try:
+                            self.set_vmax(float(val))
+                        except ValueError: 
+                            print("Błąd: Wartość musi być liczbą")
                 
                 elif command == 'read-dist':
                     self.read_distance()
-                
-                # Komendy jazdy po linii
-                elif command == 'p':
-                    response = self.send_command("P")
-                    if response:
-                        print("Tryb jazdy po linii WŁĄCZONY")
-                
-                elif command == 's':
-                    response = self.send_command("S")
-                    if response:
-                        print("Robot ZATRZYMANY")
-                
-                elif command == 'kp':
-                    if len(parts) > 1:
-                        try:
-                            val = float(parts[1])
-                            response = self.send_command(f"Kp {val}")
-                            if response:
-                                print(f"Kp ustawione na: {val}")
-                        except ValueError:
-                            print("Błąd: Podaj wartość liczbową")
-                    else:
-                        val = input("Podaj wartość Kp: ").strip()
-                        try:
-                            response = self.send_command(f"Kp {float(val)}")
-                            if response:
-                                print(f"Kp ustawione na: {val}")
-                        except ValueError:
-                            print("Błąd: Wartość musi być liczbą")
-                
-                elif command == 'ki':
-                    if len(parts) > 1:
-                        try:
-                            val = float(parts[1])
-                            response = self.send_command(f"Ki {val}")
-                            if response:
-                                print(f"Ki ustawione na: {val}")
-                        except ValueError:
-                            print("Błąd: Podaj wartość liczbową")
-                    else:
-                        val = input("Podaj wartość Ki: ").strip()
-                        try:
-                            response = self.send_command(f"Ki {float(val)}")
-                            if response:
-                                print(f"Ki ustawione na: {val}")
-                        except ValueError:
-                            print("Błąd: Wartość musi być liczbą")
-                
-                elif command == 'kd':
-                    if len(parts) > 1:
-                        try:
-                            val = float(parts[1])
-                            response = self.send_command(f"Kd {val}")
-                            if response:
-                                print(f"Kd ustawione na: {val}")
-                        except ValueError:
-                            print("Błąd: Podaj wartość liczbową")
-                    else:
-                        val = input("Podaj wartość Kd: ").strip()
-                        try:
-                            response = self.send_command(f"Kd {float(val)}")
-                            if response:
-                                print(f"Kd ustawione na: {val}")
-                        except ValueError:
-                            print("Błąd: Wartość musi być liczbą")
-                
-                elif command == 'vref':
-                    if len(parts) > 1:
-                        try:
-                            val = int(parts[1])
-                            response = self.send_command(f"Vref {val}")
-                            if response:
-                                print(f"Vref ustawione na: {val}")
-                        except ValueError:
-                            print("Błąd: Podaj wartość całkowitą (0-255)")
-                    else:
-                        val = input("Podaj prędkość bazową (0-255): ").strip()
-                        try:
-                            response = self.send_command(f"Vref {int(val)}")
-                            if response:
-                                print(f"Vref ustawione na: {val}")
-                        except ValueError:
-                            print("Błąd: Wartość musi być liczbą całkowitą")
-                
-                elif command == 't' and len(parts) > 1:
-                    try:
-                        val = int(parts[1])
-                        response = self.send_command(f"T {val}")
-                        if response:
-                            print(f"Okres próbkowania ustawiony na: {val} ms")
-                    except ValueError:
-                        print("Błąd: Podaj wartość całkowitą (50-300)")
-                
-                elif command == 'calibrate':
-                    print("\n" + "="*60)
-                    print("KALIBRACJA TRACKERA - INSTRUKCJA:")
-                    print("="*60)
-                    print("1. Postaw robota nad BIAŁYM POLEM")
-                    print("2. Wciśnij ENTER aby zacząć")
-                    print("3. Przez 5 sekund PRZESUWAJ ROBOTA:")
-                    print("   - Na linię czarną (sensory nad czarną linią)")
-                    print("   - Na białe pole (sensory nad białą kartką)")
-                    print("   - Powtarzaj aby czujnik się nauczył różnicy")
-                    print("="*60 + "\n")
-                    input("Gotów? Wciśnij ENTER...")
-                    
-                    print("Wysyłanie komendy kalibracji...")
-                    success = self.calibrate_tracker()
-                    if success:
-                        print("✓ Kalibracja zakończona!")
-                        print("Robot nauczył się rozpoznawać linię.\n")
-                    else:
-                        print("✗ Kalibracja nie powiodła się. Spróbuj ponownie.\n")
-                
-                elif command == 'read-line':
-                    response = self.send_command("READ_LINE")
-                    if response:
-                        print(f"Pozycja linii: {response}")
                 
                 elif command == 'telemetry-on':
                     response = self.send_command("TELEMETRY_ON")
@@ -640,18 +482,22 @@ class RobotInterface:
                         print("Telemetria WYŁĄCZONA")
                         self.telemetry_enabled = False
 
+                elif command == 'monitor': 
+                    secs = int(parts[1]) if len(parts) > 1 else 0
+                    self.monitor(secs)
+
                 else:
                     print("Nieznana komenda. Wpisz 'help' aby zobaczyć pomoc.")
             
-            except KeyboardInterrupt:
+            except KeyboardInterrupt: 
                 print("\n\nPrzerwano przez użytkownika")
                 break
             except Exception as e:
                 print(f"Błąd: {e}")
         
         # Zamknięcie połączenia
-        if self.ser and self.ser.is_open:
-            self.ser.close()
+        if self.ser and self.ser. is_open:
+            self. ser.close()
             print("Połączenie zamknięte")
 
 
